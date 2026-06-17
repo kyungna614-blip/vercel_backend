@@ -16,20 +16,10 @@ app = FastAPI(
     description="Creator Forge internal ops pipeline",
 )
 
-# -- CORS -- allow frontend (dev + production Vercel)
-_cors_origins = [
-    "http://localhost:3000",
-    "http://localhost:3001",
-    "http://localhost:3002",
-    "http://localhost:5173",
-]
-# Add production frontend URL from env
-if settings.FRONTEND_URL and settings.FRONTEND_URL not in _cors_origins:
-    _cors_origins.append(settings.FRONTEND_URL)
-
+# -- CORS -- allow all origins for now (tighten in production later)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_cors_origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

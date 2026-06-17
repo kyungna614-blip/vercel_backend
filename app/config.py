@@ -17,8 +17,10 @@ class Settings:
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = os.getenv("DEBUG", "true").lower() == "true"
 
-    # Database
-    DATABASE_URL: str = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR}/creator_forge.db")
+    # Database — Supabase Postgres in production, SQLite locally
+    _raw_db = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR}/creator_forge.db")
+    # SQLAlchemy requires "postgresql://" not "postgres://"
+    DATABASE_URL: str = _raw_db.replace("postgres://", "postgresql://", 1) if _raw_db.startswith("postgres://") else _raw_db
 
     # Security
     SECRET_KEY: str = os.getenv("SECRET_KEY", "")
