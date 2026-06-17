@@ -38,10 +38,13 @@ app.add_middleware(
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-# -- Database init
+# -- Database init (safe for serverless)
 @app.on_event("startup")
 def startup():
-    init_db()
+    try:
+        init_db()
+    except Exception as e:
+        print(f"[startup] DB init skipped: {e}")
 
 
 # -- API Routers
