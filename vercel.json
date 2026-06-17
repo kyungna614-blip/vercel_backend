@@ -8,28 +8,6 @@
     }
   ],
   "routes": [
-    { "src": "/static/(.*)", "dest": "/frontend/static/$1" },
-    { "src": "/(.*)",        "dest": "api/index.py" }
-  ],
-  "env": {
-    "DATABASE_URL": "@database_url",
-    "SECRET_KEY": "@secret_key",
-    "ANTHROPIC_API_KEY": "@anthropic_api_key",
-    "GROQ_API_KEY": "@groq_api_key",
-    "AI_MODEL": "@ai_model",
-    "AI_PROVIDER": "@ai_provider",
-    "SENDGRID_API_KEY": "@sendgrid_api_key",
-    "RESEND_API_KEY": "@resend_api_key",
-    "FROM_EMAIL": "@from_email",
-    "FROM_NAME": "@from_name",
-    "SMTP_HOST": "@smtp_host",
-    "SMTP_PORT": "@smtp_port",
-    "SMTP_USER": "@smtp_user",
-    "SMTP_PASS": "@smtp_pass",
-    "APIFY_API_KEY": "@apify_api_key",
-    "YOUTUBE_API_KEY": "@youtube_api_key",
-    "INSTAGRAM_ACCESS_TOKEN": "@instagram_access_token",
-    "TIKTOK_API_KEY": "@tiktok_api_key",
-    "FRONTEND_URL": "@frontend_url"
-  }
+    { "src": "/(.*)", "dest": "api/index.py" }
+  ]
 }
