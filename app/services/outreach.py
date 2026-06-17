@@ -17,56 +17,26 @@ from app.services.llm import llm_generate_json
 
 
 def _text_to_html(body_text: str, creator_name: str = "") -> str:
-    """Convert plain-text email body into clean HTML with a CTA button for any URL."""
+    """Convert plain-text email body into clean HTML. URLs become clickable links."""
     import re as _re
 
-    # 1. Extract the first URL from the entire body
-    url_match = _re.search(r'https?://[^\s<>"]+', body_text)
-    cta_url = url_match.group(0) if url_match else None
-
-    # 2. Remove the raw URL from the text (it will become a button)
-    clean_text = body_text
-    if cta_url:
-        clean_text = clean_text.replace(cta_url, '')
-
-    # 3. Split into paragraphs and build HTML
-    paragraphs = clean_text.strip().split("\n\n")
+    # Split into paragraphs by double newline
+    paragraphs = body_text.strip().split("\n\n")
     html_parts = []
-    cta_inserted = False
 
     for p in paragraphs:
         p = p.strip()
         if not p:
             continue
-        # Skip lines that are just "Check them out here:" or similar bare CTA text
-        p_clean = p.replace('\n', ' ').strip()
-        if p_clean.endswith(':') and len(p_clean) < 60:
-            # This is likely "Check them out here:" — merge with CTA button
-            html_parts.append(f'<p style="margin:0 0 8px 0;line-height:1.7;">{p_clean}</p>')
-            if cta_url and not cta_inserted:
-                html_parts.append(
-                    f'<div style="text-align:center;margin:24px 0;">'
-                    f'<a href="{cta_url}" style="display:inline-block;background:#c0392b;color:#ffffff;'
-                    f'text-decoration:none;font-weight:700;font-size:15px;padding:14px 32px;'
-                    f'border-radius:8px;">View Your Custom Product Ideas &rarr;</a>'
-                    f'</div>'
-                )
-                cta_inserted = True
-            continue
-
+        # Convert single newlines to <br>
         p_html = p.replace("\n", "<br>")
-        html_parts.append(f'<p style="margin:0 0 16px 0;line-height:1.7;">{p_html}</p>')
-
-    # If we found a URL but never inserted the button, add it before sign-off
-    if cta_url and not cta_inserted:
-        insert_pos = max(0, len(html_parts) - 2)  # before "Best," and "Reply STOP"
-        html_parts.insert(insert_pos,
-            f'<div style="text-align:center;margin:24px 0;">'
-            f'<a href="{cta_url}" style="display:inline-block;background:#c0392b;color:#ffffff;'
-            f'text-decoration:none;font-weight:700;font-size:15px;padding:14px 32px;'
-            f'border-radius:8px;">View Your Custom Product Ideas &rarr;</a>'
-            f'</div>'
+        # Convert any URL into a clickable link
+        p_html = _re.sub(
+            r'(https?://[^\s<>"]+)',
+            r'<a href="\1" style="color:#c0392b;font-weight:600;text-decoration:underline;">\1</a>',
+            p_html
         )
+        html_parts.append(f'<p style="margin:0 0 16px 0;line-height:1.7;">{p_html}</p>')
 
     body_html = "\n".join(html_parts)
 
