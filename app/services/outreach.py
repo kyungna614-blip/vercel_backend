@@ -18,23 +18,35 @@ from app.services.llm import llm_generate_json
 
 def _text_to_html(body_text: str, creator_name: str = "") -> str:
     """Convert plain-text email body into clean, professional HTML."""
+    import re as _re
     paragraphs = body_text.strip().split("\n\n")
-    html_paragraphs = ""
+    html_parts = []
+
     for p in paragraphs:
         p = p.strip()
         if not p:
             continue
-        # Convert single newlines within a paragraph to <br>
         p_html = p.replace("\n", "<br>")
-        # Make links clickable
-        if "http" in p_html:
-            import re as _re
-            p_html = _re.sub(
-                r'(https?://[^\s<>"]+)',
-                r'<a href="\1" style="color:#c0392b;text-decoration:underline;font-weight:600;">View Your Custom Product Ideas &rarr;</a>',
-                p_html
-            )
-        html_paragraphs += f'<p style="margin:0 0 16px 0;line-height:1.7;">{p_html}</p>\n'
+
+        # Find URLs and make them clickable buttons instead of inline links
+        urls = _re.findall(r'https?://[^\s<>"]+', p_html)
+        if urls:
+            # Replace inline URL with a styled CTA button
+            for url in urls:
+                cta_button = (
+                    f'</p>'
+                    f'<div style="text-align:center;margin:20px 0;">'
+                    f'<a href="{url}" style="display:inline-block;background:#c0392b;color:#ffffff;'
+                    f'text-decoration:none;font-weight:700;font-size:15px;padding:14px 32px;'
+                    f'border-radius:8px;">View Your Custom Product Ideas &rarr;</a>'
+                    f'</div>'
+                    f'<p style="margin:0 0 16px 0;line-height:1.7;">'
+                )
+                p_html = p_html.replace(url, cta_button)
+
+        html_parts.append(f'<p style="margin:0 0 16px 0;line-height:1.7;">{p_html}</p>')
+
+    body_html = "\n".join(html_parts)
 
     return f"""<!DOCTYPE html>
 <html>
@@ -42,7 +54,7 @@ def _text_to_html(body_text: str, creator_name: str = "") -> str:
 <body style="margin:0;padding:0;background:#f9f9f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
   <div style="max-width:560px;margin:40px auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #eee;">
     <div style="padding:36px 32px;color:#1a1a1a;font-size:15px;">
-      {html_paragraphs}
+      {body_html}
     </div>
     <div style="padding:20px 32px;background:#fafafa;border-top:1px solid #eee;">
       <p style="margin:0;font-size:11px;color:#999;line-height:1.5;">
@@ -87,11 +99,13 @@ Requirements:
 2. Body under 200 words, 3-4 short paragraphs.
 3. Reference something SPECIFIC about their content, niche, or audience.
 4. Pitch co-launching a custom product (SaaS, course, community, or merch) tailored to their niche.
-5. Include the onboarding link as a clickable CTA: {onboard_link}
+5. Put the onboarding link ON ITS OWN LINE, not inline in a sentence. Like this:
+   Check them out here:\n{onboard_link}
 6. Sign off with "{sender_name}" (NOT "[Your Name]" — use the actual sender name provided).
 7. End with a short opt-out line: "Reply STOP to unsubscribe."
 8. Do NOT use placeholder text like [Your Name], [Company], etc.
 9. Format the body with proper line breaks (use \n).
+10. The URL must appear exactly as: {onboard_link} — do NOT modify, shorten, or wrap it.
 
 Return ONLY a JSON object:
 {{
