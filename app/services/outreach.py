@@ -16,6 +16,44 @@ from app.integrations.email_provider import email_provider
 from app.services.llm import llm_generate_json
 
 
+def _text_to_html(body_text: str, creator_name: str = "") -> str:
+    """Convert plain-text email body into clean, professional HTML."""
+    paragraphs = body_text.strip().split("\n\n")
+    html_paragraphs = ""
+    for p in paragraphs:
+        p = p.strip()
+        if not p:
+            continue
+        # Convert single newlines within a paragraph to <br>
+        p_html = p.replace("\n", "<br>")
+        # Make links clickable
+        if "http" in p_html:
+            import re as _re
+            p_html = _re.sub(
+                r'(https?://[^\s<>"]+)',
+                r'<a href="\1" style="color:#c0392b;text-decoration:underline;font-weight:600;">View Your Custom Product Ideas &rarr;</a>',
+                p_html
+            )
+        html_paragraphs += f'<p style="margin:0 0 16px 0;line-height:1.7;">{p_html}</p>\n'
+
+    return f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f9f9f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <div style="max-width:560px;margin:40px auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #eee;">
+    <div style="padding:36px 32px;color:#1a1a1a;font-size:15px;">
+      {html_paragraphs}
+    </div>
+    <div style="padding:20px 32px;background:#fafafa;border-top:1px solid #eee;">
+      <p style="margin:0;font-size:11px;color:#999;line-height:1.5;">
+        This email was sent by Creator Forge. Reply STOP to unsubscribe.
+      </p>
+    </div>
+  </div>
+</body>
+</html>"""
+
+
 def generate_outreach_email(db: Session, creator_id: str, tone: str = "friendly") -> dict:
     """
     Generate a personalized cold outreach email using Claude,
@@ -27,7 +65,8 @@ def generate_outreach_email(db: Session, creator_id: str, tone: str = "friendly"
 
     niche_str = ", ".join(creator.niche or ["Content Creation"])
     onboard_link = f"{settings.FRONTEND_URL}/onboard/{creator.id}"
-    prompt = f"""You are an expert talent scout and product manager.
+    sender_name = settings.FROM_NAME or "Creator Forge Team"
+    prompt = f"""You are an expert talent scout and product manager at Creator Forge.
 Write a personalized cold outreach email to invite a creator to co-found a brand/product with us.
 
 Creator Details:
@@ -39,21 +78,25 @@ Creator Details:
 - Subscribers/Followers: {creator.follower_count:,}
 
 Personalized Onboarding Link: {onboard_link}
+Sender Name: {sender_name}
 
-Tone: {tone}
+Tone: {tone}, conversational, human
 
 Requirements:
-1. A clear, hooky, and personalized subject line.
-2. A body under 200 words.
-3. Reference their work/niche.
-4. Pitch the concept of launching a custom product together (tailored to {niche_str}).
-5. Include the onboarding link ({onboard_link}) as the primary CTA.
-6. Must include a STOP/unsubscribe footnote.
+1. A clear, hooky, personalized subject line (NOT generic like "Partnership Opportunity").
+2. Body under 200 words, 3-4 short paragraphs.
+3. Reference something SPECIFIC about their content, niche, or audience.
+4. Pitch co-launching a custom product (SaaS, course, community, or merch) tailored to their niche.
+5. Include the onboarding link as a clickable CTA: {onboard_link}
+6. Sign off with "{sender_name}" (NOT "[Your Name]" — use the actual sender name provided).
+7. End with a short opt-out line: "Reply STOP to unsubscribe."
+8. Do NOT use placeholder text like [Your Name], [Company], etc.
+9. Format the body with proper line breaks (use \n).
 
 Return ONLY a JSON object:
 {{
   "subject": "subject here",
-  "body": "body here"
+  "body": "full email body here with \\n for line breaks"
 }}
 """
 
@@ -78,15 +121,15 @@ Return ONLY a JSON object:
 
     body = (
         f"Hi {creator.display_name},\n\n"
-        f"I hope you're having a great week. I really enjoy your content in the {niche_str} space "
-        f"and the community you've built.\n\n"
-        f"I'm reaching out from Creator Forge. We help creators design, build, and launch custom products "
-        f"(SaaS, digital communities, or signature merchandise). We fund the development and handle all operations, "
-        f"splitting the equity with you.\n\n"
-        f"We've already generated a few custom product ideas tailored to your audience. "
+        f"I've been following your {creator.platform} channel and love what you're doing in the {niche_str} space. "
+        f"The community you've built with {creator.follower_count:,} followers is impressive.\n\n"
+        f"I'm reaching out from Creator Forge — we help creators like you design, build, and launch "
+        f"custom products (SaaS tools, digital communities, courses, or merch). We fund everything and "
+        f"handle all the operations. You keep creative control and earn revenue.\n\n"
+        f"We've already put together a few product ideas tailored specifically to your audience. "
         f"Check them out here:\n{onboard_link}\n\n"
         f"Best,\n"
-        f"The Creator Forge Team\n\n"
+        f"{sender_name}\n\n"
         f"Reply STOP to unsubscribe."
     )
     return {"subject": subject, "body": body}
@@ -149,10 +192,11 @@ def send_outreach_email(db: Session, creator_id: str, subject: str, body: str) -
 
     # 2. Dispatch email via Resend
     try:
+        html_body = _text_to_html(body, creator.display_name)
         res = email_provider.send(
             to_email=email,
             subject=subject,
-            body_html=body.replace("\n", "<br>"),
+            body_html=html_body,
             body_text=body
         )
         if res.get("status") in ("sent", "mock_sent_sandbox"):
