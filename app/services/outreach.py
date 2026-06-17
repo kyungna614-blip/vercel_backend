@@ -58,6 +58,14 @@ def _text_to_html(body_text: str, creator_name: str = "") -> str:
 </html>"""
 
 
+def _onboard_link(creator_id: str) -> str:
+    """Build the creator onboarding URL from FRONTEND_URL."""
+    frontend = settings.FRONTEND_URL.rstrip('/')
+    if not frontend or not frontend.startswith('http'):
+        frontend = 'https://vercel-frontend-cyan-iota.vercel.app'
+    return f"{frontend}/onboard/{creator_id}"
+
+
 def generate_outreach_email(db: Session, creator_id: str, tone: str = "friendly") -> dict:
     """
     Generate a personalized cold outreach email using Claude,
@@ -68,11 +76,7 @@ def generate_outreach_email(db: Session, creator_id: str, tone: str = "friendly"
         raise ValueError("Creator not found")
 
     niche_str = ", ".join(creator.niche or ["Content Creation"])
-    # Ensure we have a full URL, never just a path
-    frontend = settings.FRONTEND_URL.rstrip('/')
-    if not frontend or not frontend.startswith('http'):
-        frontend = 'https://vercel-frontend-cyan-iota.vercel.app'
-    onboard_link = f"{frontend}/onboard/{creator.id}"
+    onboard_link = _onboard_link(creator.id)
     sender_name = settings.FROM_NAME or "Creator Forge Team"
     prompt = f"""You are an expert talent scout and product manager at Creator Forge.
 Write a personalized cold outreach email to invite a creator to co-found a brand/product with us.
@@ -291,6 +295,8 @@ def process_drip_sequences(db: Session) -> int:
         # If no follow-ups yet, send Step 2 (FollowUp 1)
         if len(followups) == 0:
             # Draft and send FollowUp 1
+            onboard_link = _onboard_link(creator.id)
+            sender_name = settings.FROM_NAME or "Creator Forge Team"
             subject = f"Re: Co-founding a brand with {creator.display_name}?"
             body = (
                 f"Hi {creator.display_name},\n\n"
@@ -298,18 +304,21 @@ def process_drip_sequences(db: Session) -> int:
                 f"but I'd love to know if you've thought about building a signature product for your community.\n\n"
                 f"As mentioned, we take care of all the heavy lifting (capital, development, design) so you can "
                 f"focus purely on content and creative direction.\n\n"
+                f"You can review the product ideas we built for you here:\n"
+                f"{onboard_link}\n\n"
                 f"Let me know if you have 10 minutes to talk next week!\n\n"
                 f"Best,\n"
-                f"The Creator Cofounder Team\n\n"
+                f"{sender_name}\n\n"
                 f"Reply STOP to unsubscribe."
             )
             
             # Send using email provider
             try:
+                html_body = _text_to_html(body, creator.display_name)
                 res = email_provider.send(
                     to_email=creator.email_public or "demo@example.com",
                     subject=subject,
-                    body_html=body.replace("\n", "<br>"),
+                    body_html=html_body,
                     body_text=body
                 )
                 
@@ -334,23 +343,28 @@ def process_drip_sequences(db: Session) -> int:
         # If 1 follow-up already exists, send Step 3 (FollowUp 2)
         elif len(followups) == 1:
             # Draft and send FollowUp 2
+            onboard_link = _onboard_link(creator.id)
+            sender_name = settings.FROM_NAME or "Creator Forge Team"
             subject = f"Final follow-up: partnership opportunity"
             body = (
                 f"Hi {creator.display_name},\n\n"
                 f"I promise this is the last time I'll occupy your inbox! I wanted to check in one last time "
                 f"to see if you're interested in launching {creator.niche[0] if creator.niche else 'your brand'} product with us.\n\n"
+                f"Here's the link one more time in case you missed it:\n"
+                f"{onboard_link}\n\n"
                 f"If now isn't the right time, no worries at all. Feel free to reach out down the road if you'd like to chat.\n\n"
                 f"Wishing you all the best with your channel!\n\n"
                 f"Best,\n"
-                f"The Creator Cofounder Team\n\n"
+                f"{sender_name}\n\n"
                 f"Reply STOP to unsubscribe."
             )
             
             try:
+                html_body = _text_to_html(body, creator.display_name)
                 res = email_provider.send(
                     to_email=creator.email_public or "demo@example.com",
                     subject=subject,
-                    body_html=body.replace("\n", "<br>"),
+                    body_html=html_body,
                     body_text=body
                 )
                 

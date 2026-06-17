@@ -58,10 +58,11 @@ class Settings:
     APIFY_API_KEY: str = os.getenv("APIFY_API_KEY", "")
 
     # Frontend URL (used in outreach email links)
-    # Auto-detect Vercel: if VERCEL_URL is set, use it as fallback
-    _vercel_url = os.getenv("VERCEL_URL", "")
-    FRONTEND_URL: str = os.getenv("FRONTEND_URL", 
-        f"https://{_vercel_url}" if _vercel_url else "http://localhost:3001"
+    # VERCEL_URL on the backend points to the backend domain — NOT the frontend.
+    # Always default to the real frontend deployment.
+    FRONTEND_URL: str = os.getenv(
+        "FRONTEND_URL",
+        "https://vercel-frontend-cyan-iota.vercel.app"
     )
 
 

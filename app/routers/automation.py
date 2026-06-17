@@ -128,7 +128,7 @@ def trigger_pipeline(request: TriggerRequest, db: Session = Depends(get_db)):
         # Step 3: Automated Cold Outreach
         if ideas:
             idea = ideas[0]
-            app_url = getattr(settings, "FRONTEND_URL", "https://creatorforge.app")
+            app_url = settings.FRONTEND_URL.rstrip('/')
             onboard_link = f"{app_url}/onboard/{creator.id}"
             
             subject = f"Custom product for {creator.display_name}'s audience"
@@ -193,7 +193,7 @@ def select_product(creator_id: str, request: SelectProductRequest, db: Session =
     """
     try:
         updated_idea = generate_landing_page_outline_and_scaffold(db, creator_id, request.idea_id)
-        app_url = getattr(settings, "FRONTEND_URL", "https://creatorforge.app")
+        app_url = settings.FRONTEND_URL.rstrip('/')
         return {
             "status": "success",
             "message": "Dynamic template Landing Page activated!",

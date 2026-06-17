@@ -69,6 +69,7 @@ def get_settings():
         "ai_model":           settings.AI_MODEL,
         "ai_provider":        settings.AI_PROVIDER,
         "ai_configured":      bool(settings.GROQ_API_KEY or settings.ANTHROPIC_API_KEY),
+        "frontend_url":       settings.FRONTEND_URL,
     }
 
 
