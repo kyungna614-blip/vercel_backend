@@ -1,0 +1,29 @@
+{
+  "pythonVersion": "3.12",
+  "pythonPlatform": "Windows",
+  "venvPath": ".",
+  "venv": "venv",
+  "typeCheckingMode": "basic",
+  "reportMissingImports": "warning",
+  "reportMissingModuleSource": "none",
+  "reportAttributeAccessIssue": "none",
+  "reportArgumentType": "none",
+  "reportCallIssue": "none",
+  "reportOptionalMemberAccess": "none",
+  "reportIndexIssue": "none",
+  "reportOperatorIssue": "none",
+  "reportReturnType": "none",
+  "reportAssignmentType": "none",
+  "reportGeneralClassIssue": "none",
+  "reportGeneralTypeIssues": "none",
+  "reportRedefinedVariable": "none",
+  "reportUnusedImport": "none",
+  "reportPossiblyUnbound": "none",
+  "reportOptionalSubscript": "none",
+  "exclude": [
+    "__pycache__",
+    "venv",
+    "test_*.py",
+    "verify_*.py"
+  ]
+}
