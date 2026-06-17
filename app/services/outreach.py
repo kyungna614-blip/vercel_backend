@@ -17,34 +17,56 @@ from app.services.llm import llm_generate_json
 
 
 def _text_to_html(body_text: str, creator_name: str = "") -> str:
-    """Convert plain-text email body into clean, professional HTML."""
+    """Convert plain-text email body into clean HTML with a CTA button for any URL."""
     import re as _re
-    paragraphs = body_text.strip().split("\n\n")
+
+    # 1. Extract the first URL from the entire body
+    url_match = _re.search(r'https?://[^\s<>"]+', body_text)
+    cta_url = url_match.group(0) if url_match else None
+
+    # 2. Remove the raw URL from the text (it will become a button)
+    clean_text = body_text
+    if cta_url:
+        clean_text = clean_text.replace(cta_url, '')
+
+    # 3. Split into paragraphs and build HTML
+    paragraphs = clean_text.strip().split("\n\n")
     html_parts = []
+    cta_inserted = False
 
     for p in paragraphs:
         p = p.strip()
         if not p:
             continue
-        p_html = p.replace("\n", "<br>")
-
-        # Find URLs and make them clickable buttons instead of inline links
-        urls = _re.findall(r'https?://[^\s<>"]+', p_html)
-        if urls:
-            # Replace inline URL with a styled CTA button
-            for url in urls:
-                cta_button = (
-                    f'</p>'
-                    f'<div style="text-align:center;margin:20px 0;">'
-                    f'<a href="{url}" style="display:inline-block;background:#c0392b;color:#ffffff;'
+        # Skip lines that are just "Check them out here:" or similar bare CTA text
+        p_clean = p.replace('\n', ' ').strip()
+        if p_clean.endswith(':') and len(p_clean) < 60:
+            # This is likely "Check them out here:" — merge with CTA button
+            html_parts.append(f'<p style="margin:0 0 8px 0;line-height:1.7;">{p_clean}</p>')
+            if cta_url and not cta_inserted:
+                html_parts.append(
+                    f'<div style="text-align:center;margin:24px 0;">'
+                    f'<a href="{cta_url}" style="display:inline-block;background:#c0392b;color:#ffffff;'
                     f'text-decoration:none;font-weight:700;font-size:15px;padding:14px 32px;'
                     f'border-radius:8px;">View Your Custom Product Ideas &rarr;</a>'
                     f'</div>'
-                    f'<p style="margin:0 0 16px 0;line-height:1.7;">'
                 )
-                p_html = p_html.replace(url, cta_button)
+                cta_inserted = True
+            continue
 
+        p_html = p.replace("\n", "<br>")
         html_parts.append(f'<p style="margin:0 0 16px 0;line-height:1.7;">{p_html}</p>')
+
+    # If we found a URL but never inserted the button, add it before sign-off
+    if cta_url and not cta_inserted:
+        insert_pos = max(0, len(html_parts) - 2)  # before "Best," and "Reply STOP"
+        html_parts.insert(insert_pos,
+            f'<div style="text-align:center;margin:24px 0;">'
+            f'<a href="{cta_url}" style="display:inline-block;background:#c0392b;color:#ffffff;'
+            f'text-decoration:none;font-weight:700;font-size:15px;padding:14px 32px;'
+            f'border-radius:8px;">View Your Custom Product Ideas &rarr;</a>'
+            f'</div>'
+        )
 
     body_html = "\n".join(html_parts)
 
@@ -76,7 +98,11 @@ def generate_outreach_email(db: Session, creator_id: str, tone: str = "friendly"
         raise ValueError("Creator not found")
 
     niche_str = ", ".join(creator.niche or ["Content Creation"])
-    onboard_link = f"{settings.FRONTEND_URL}/onboard/{creator.id}"
+    # Ensure we have a full URL, never just a path
+    frontend = settings.FRONTEND_URL.rstrip('/')
+    if not frontend or not frontend.startswith('http'):
+        frontend = 'https://vercel-frontend-cyan-iota.vercel.app'
+    onboard_link = f"{frontend}/onboard/{creator.id}"
     sender_name = settings.FROM_NAME or "Creator Forge Team"
     prompt = f"""You are an expert talent scout and product manager at Creator Forge.
 Write a personalized cold outreach email to invite a creator to co-found a brand/product with us.
@@ -140,8 +166,8 @@ Return ONLY a JSON object:
         f"I'm reaching out from Creator Forge — we help creators like you design, build, and launch "
         f"custom products (SaaS tools, digital communities, courses, or merch). We fund everything and "
         f"handle all the operations. You keep creative control and earn revenue.\n\n"
-        f"We've already put together a few product ideas tailored specifically to your audience. "
-        f"Check them out here:\n{onboard_link}\n\n"
+        f"We've already put together a few product ideas tailored specifically to your audience.\n\n"
+        f"{onboard_link}\n\n"
         f"Best,\n"
         f"{sender_name}\n\n"
         f"Reply STOP to unsubscribe."
