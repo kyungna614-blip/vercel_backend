@@ -60,35 +60,36 @@ def trigger_pipeline(request: TriggerRequest, db: Session = Depends(get_db)):
                 "subscriber_count": int(ch_data["statistics"].get("subscriberCount", 0))
             })
 
-    # ── Apify: scrape business emails (dataovercoffee actor + v3 API) ──
+    # ── Apify: scrape business emails (1 channel at a time via HTTP API) ──
     apify_token = settings.APIFY_API_KEY
     if apify_token and channels_found:
-        from apify_client import ApifyClient  # type: ignore[import-untyped]
-        client = ApifyClient(apify_token)
-        try:
-            channel_urls = [ch["url"] for ch in channels_found]
-            print(f"[Apify] Scraping emails for {len(channel_urls)} channels...")
-            run = client.actor("dataovercoffee/youtube-channel-business-email-scraper").call(
-                run_input={"channels": channel_urls},
+        APIFY_BASE = "https://api.apify.com/v2"
+        for ch in channels_found:
+            if ch.get("email"):
+                continue
+            api_url = (
+                f"{APIFY_BASE}/acts/dataovercoffee~youtube-channel-business-email-scraper"
+                f"/run-sync-get-dataset-items?token={apify_token}&timeout=120&memory=512"
             )
-            # apify_client v3: Run object, not dict
-            dataset_id = getattr(run, "default_dataset_id", None)
-            if dataset_id is None and isinstance(run, dict):
-                dataset_id = run.get("defaultDatasetId")
-            if dataset_id:
-                apify_items = list(client.dataset(dataset_id).iterate_items())
-                print(f"[Apify] Got {len(apify_items)} results")
-                for item in apify_items:
-                    found_email = item.get("Email") or item.get("email") or item.get("businessEmail") or ""
-                    item_cid = item.get("ChannelId") or ""
-                    if found_email and "@" in found_email:
-                        for ch in channels_found:
-                            if ch["channel_id"] == item_cid and not ch.get("email"):
-                                ch["email"] = found_email.strip()
-                                print(f"[Apify] Email for {ch['title']}: {found_email.strip()}")
-                                break
-        except Exception as e:
-            print(f"[Apify] Batch email scrape error: {e}")
+            try:
+                r_apify = httpx.post(
+                    api_url,
+                    json={"channels": [ch["url"]]},
+                    headers={"Content-Type": "application/json"},
+                    timeout=150,
+                )
+                if r_apify.status_code in (200, 201):
+                    items = r_apify.json() if isinstance(r_apify.json(), list) else []
+                    for item in items:
+                        found_email = item.get("Email") or item.get("email") or item.get("businessEmail") or ""
+                        if found_email and "@" in found_email:
+                            ch["email"] = found_email.strip()
+                            print(f"[Apify] Email for {ch['title']}: {found_email.strip()}")
+                            break
+                else:
+                    print(f"[Apify] {ch['title']} HTTP {r_apify.status_code}: {r_apify.text[:200]}")
+            except Exception as e:
+                print(f"[Apify] {ch['title']} error: {e}")
 
     # ── Fallback: extract emails from channel description (bio) ──
     for ch in channels_found:

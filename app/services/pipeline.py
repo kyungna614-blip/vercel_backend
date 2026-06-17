@@ -235,50 +235,62 @@ def _scrape_emails_apify(channel_ids, keyword, apify_key):
     """
     Uses dataovercoffee/youtube-channel-business-email-scraper via direct HTTP API.
     No apify_client SDK needed — avoids import errors on Vercel.
+
+    Scrapes channels ONE AT A TIME so a single slow channel
+    cannot time-out and kill the entire batch.
     """
-    channel_urls = [f"https://www.youtube.com/channel/{cid}" for cid in channel_ids]
-    run_input = {"channels": channel_urls}
-
-    print(f"[Apify] Scraping emails for {len(channel_urls)} channels via HTTP API...")
-
-    # Start run synchronously and get dataset items in one call
-    api_url = (
-        f"https://api.apify.com/v2/acts/dataovercoffee~youtube-channel-business-email-scraper"
-        f"/run-sync-get-dataset-items?token={apify_key}&timeout=90"
-    )
-    r = httpx.post(
-        api_url,
-        json=run_input,
-        headers={"Content-Type": "application/json"},
-        timeout=120,
-    )
-
-    if r.status_code not in (200, 201):
-        raise RuntimeError(f"Apify HTTP {r.status_code}: {r.text[:300]}")
-
-    dataset_items = r.json() if isinstance(r.json(), list) else []
-    print(f"[Apify] Got {len(dataset_items)} results")
-
     email_map = {}
-    for item in dataset_items:
-        email = (
-            item.get("Email")
-            or item.get("email")
-            or item.get("businessEmail")
-            or ""
+    succeeded = 0
+    failed = 0
+
+    print(f"[Apify] Scraping emails for {len(channel_ids)} channels (1-by-1)...")
+
+    for cid in channel_ids:
+        channel_url = f"https://www.youtube.com/channel/{cid}"
+
+        # Per-channel: 120s Apify timeout, 512 MB memory
+        api_url = (
+            f"https://api.apify.com/v2/acts/dataovercoffee~youtube-channel-business-email-scraper"
+            f"/run-sync-get-dataset-items?token={apify_key}&timeout=120&memory=512"
         )
-        item_channel_id = item.get("ChannelId") or ""
-        if not email or "@" not in email:
-            continue
-        if item_channel_id in channel_ids:
-            email_map[item_channel_id] = email.strip()
-            print(f"[Apify] Found email for {item_channel_id}: {email.strip()}")
-        else:
-            for cid in channel_ids:
-                if cid not in email_map:
+
+        try:
+            r = httpx.post(
+                api_url,
+                json={"channels": [channel_url]},
+                headers={"Content-Type": "application/json"},
+                timeout=150,          # client-side timeout > Apify timeout
+            )
+
+            if r.status_code not in (200, 201):
+                print(f"[Apify] {cid} HTTP {r.status_code}: {r.text[:200]}")
+                failed += 1
+                continue
+
+            items = r.json() if isinstance(r.json(), list) else []
+            for item in items:
+                email = (
+                    item.get("Email")
+                    or item.get("email")
+                    or item.get("businessEmail")
+                    or ""
+                )
+                if email and "@" in email:
                     email_map[cid] = email.strip()
-                    print(f"[Apify] Mapped email {email.strip()} to {cid}")
+                    print(f"[Apify] Email for {cid}: {email.strip()}")
+                    succeeded += 1
                     break
+            else:
+                print(f"[Apify] No email for {cid}")
+
+        except (httpx.TimeoutException, httpx.ConnectError) as e:
+            print(f"[Apify] {cid} timeout/connect error: {e}")
+            failed += 1
+        except Exception as e:
+            print(f"[Apify] {cid} error: {e}")
+            failed += 1
+
+    print(f"[Apify] Done — {succeeded} emails, {failed} failed, {len(channel_ids)} total")
     return email_map
 
 

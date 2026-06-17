@@ -194,7 +194,7 @@ def scrape_youtube(handle: str) -> dict:
     apify_key = settings.APIFY_API_KEY
     if apify_key and channel_id:
         try:
-            apify_url = f"https://api.apify.com/v2/actors/dataovercoffee~youtube-channel-business-email-scraper/run-sync-get-dataset-items?token={apify_key}&timeout=60"
+            apify_url = f"https://api.apify.com/v2/actors/dataovercoffee~youtube-channel-business-email-scraper/run-sync-get-dataset-items?token={apify_key}&timeout=120&memory=512"
             payload = {
                 "channels": [
                     f"https://www.youtube.com/channel/{channel_id}"
@@ -202,7 +202,7 @@ def scrape_youtube(handle: str) -> dict:
             }
             # Execute synchronously
             print(f"Calling Apify business email scraper for channel {channel_id}...")
-            r_apify = httpx.post(apify_url, json=payload, headers={"Content-Type": "application/json"}, timeout=75)
+            r_apify = httpx.post(apify_url, json=payload, headers={"Content-Type": "application/json"}, timeout=150)
             if r_apify.status_code == 200 or r_apify.status_code == 201:
                 items = r_apify.json()
                 if isinstance(items, list) and len(items) > 0:
