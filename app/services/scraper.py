@@ -258,39 +258,23 @@ def _clean_url(url: str) -> str:
 
 def _apify_run(actor_id: str, run_input: dict, api_key: str) -> list:
     """
-    Run an Apify actor synchronously and return the dataset items.
-    Polls until finished (max 60s).
+    Run an Apify actor synchronously via direct HTTP API.
+    No SDK needed — avoids import errors on Vercel.
     """
-    import time
-    base = "https://api.apify.com/v2"
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-
-    # Apify uses ~ not / in URL paths for actor IDs
     actor_url_id = actor_id.replace("/", "~")
-    # Start run
+    api_url = (
+        f"https://api.apify.com/v2/acts/{actor_url_id}"
+        f"/run-sync-get-dataset-items?token={api_key}&timeout=90"
+    )
     r = httpx.post(
-        f"{base}/acts/{actor_url_id}/runs",
-        json=run_input, headers=headers, timeout=20,
+        api_url,
+        json=run_input,
+        headers={"Content-Type": "application/json"},
+        timeout=120,
     )
     if r.status_code not in (200, 201):
-        raise RuntimeError(f"Apify run failed: {r.status_code} {r.text[:200]}")
-    run_id = r.json()["data"]["id"]
-
-    # Poll for completion
-    for _ in range(24):  # 24 × 2.5s = 60s max
-        time.sleep(2.5)
-        status_r = httpx.get(f"{base}/actor-runs/{run_id}", headers=headers, timeout=10)
-        status = status_r.json()["data"]["status"]
-        if status in ("SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"):
-            break
-
-    if status != "SUCCEEDED":
-        raise RuntimeError(f"Apify actor {actor_id} ended with status: {status}")
-
-    # Fetch results
-    dataset_id = status_r.json()["data"]["defaultDatasetId"]
-    items_r = httpx.get(f"{base}/datasets/{dataset_id}/items", headers=headers, timeout=15)
-    return items_r.json() if isinstance(items_r.json(), list) else []
+        raise RuntimeError(f"Apify HTTP {r.status_code}: {r.text[:300]}")
+    return r.json() if isinstance(r.json(), list) else []
 
 
 def scrape_instagram(handle: str) -> dict:

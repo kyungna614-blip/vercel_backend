@@ -233,29 +233,30 @@ def track_email_sent(db: Session, run_id: str, creator_id: str, creator_name: st
 
 def _scrape_emails_apify(channel_ids, keyword, apify_key):
     """
-    Uses dataovercoffee/youtube-channel-business-email-scraper.
-    Compatible with apify_client v3 (Run object, not dict).
+    Uses dataovercoffee/youtube-channel-business-email-scraper via direct HTTP API.
+    No apify_client SDK needed — avoids import errors on Vercel.
     """
-    from apify_client import ApifyClient  # type: ignore[import-untyped]
-    client = ApifyClient(apify_key)
-
     channel_urls = [f"https://www.youtube.com/channel/{cid}" for cid in channel_ids]
     run_input = {"channels": channel_urls}
 
-    print(f"[Apify] Scraping emails for {len(channel_urls)} channels...")
-    run = client.actor("dataovercoffee/youtube-channel-business-email-scraper").call(
-        run_input=run_input,
+    print(f"[Apify] Scraping emails for {len(channel_urls)} channels via HTTP API...")
+
+    # Start run synchronously and get dataset items in one call
+    api_url = (
+        f"https://api.apify.com/v2/acts/dataovercoffee~youtube-channel-business-email-scraper"
+        f"/run-sync-get-dataset-items?token={apify_key}&timeout=90"
+    )
+    r = httpx.post(
+        api_url,
+        json=run_input,
+        headers={"Content-Type": "application/json"},
+        timeout=120,
     )
 
-    # apify_client v3: Run object — use attribute, not subscript
-    dataset_id = getattr(run, "default_dataset_id", None)
-    if dataset_id is None and isinstance(run, dict):
-        dataset_id = run.get("defaultDatasetId")
-    if not dataset_id:
-        print("[Apify] WARNING: Could not get dataset ID from run result")
-        return {}
+    if r.status_code not in (200, 201):
+        raise RuntimeError(f"Apify HTTP {r.status_code}: {r.text[:300]}")
 
-    dataset_items = list(client.dataset(dataset_id).iterate_items())
+    dataset_items = r.json() if isinstance(r.json(), list) else []
     print(f"[Apify] Got {len(dataset_items)} results")
 
     email_map = {}
@@ -266,7 +267,6 @@ def _scrape_emails_apify(channel_ids, keyword, apify_key):
             or item.get("businessEmail")
             or ""
         )
-        # dataovercoffee returns ChannelId directly
         item_channel_id = item.get("ChannelId") or ""
         if not email or "@" not in email:
             continue
@@ -274,8 +274,6 @@ def _scrape_emails_apify(channel_ids, keyword, apify_key):
             email_map[item_channel_id] = email.strip()
             print(f"[Apify] Found email for {item_channel_id}: {email.strip()}")
         else:
-            # fallback: try matching by handle/url
-            ch_handle = item.get("ChannelHandle") or ""
             for cid in channel_ids:
                 if cid not in email_map:
                     email_map[cid] = email.strip()

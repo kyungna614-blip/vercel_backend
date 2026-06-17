@@ -58,7 +58,11 @@ class Settings:
     APIFY_API_KEY: str = os.getenv("APIFY_API_KEY", "")
 
     # Frontend URL (used in outreach email links)
-    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3001")
+    # Auto-detect Vercel: if VERCEL_URL is set, use it as fallback
+    _vercel_url = os.getenv("VERCEL_URL", "")
+    FRONTEND_URL: str = os.getenv("FRONTEND_URL", 
+        f"https://{_vercel_url}" if _vercel_url else "http://localhost:3001"
+    )
 
 
 settings = Settings()
