@@ -92,6 +92,12 @@ def proxy_avatar(url: str):
         return Response(status_code=404)
 
 
+# -- Root
+@app.get("/")
+def root():
+    return {"status": "ok", "app": settings.APP_NAME, "version": settings.APP_VERSION, "docs": "/docs"}
+
+
 # -- Health
 @app.get("/health")
 def health():
