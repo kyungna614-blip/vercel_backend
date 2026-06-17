@@ -63,7 +63,7 @@ class Settings:
     FRONTEND_URL: str = os.getenv(
         "FRONTEND_URL",
         "https://vercel-frontend-cyan-iota.vercel.app"
-    )
+    ).strip()
 
 
 settings = Settings()
